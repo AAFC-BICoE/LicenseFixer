@@ -1,18 +1,44 @@
-Step 1: Setup SSH key
-https://confluence.atlassian.com/bitbucket/set-up-ssh-for-git-728138079.html
-ssh-keygen, leave no passphrase for the script
+# License Fixer 
 
-IF USING SSH for bitbucket you MUST connect to the host altssh.bitbucket.org, which should be edited in the config
-	- Most likely add this to your script to edit the config file
-Change default SSH to 443 by going into /etc/ssh/ssh_config and changing '#port 22' to 'port 443'
- 
-requires requests library from http://docs.python-requests.org/en/master/
+A Python script which will correct the license and copyright information for Github or Bitbucket repositories in an organization or user space.
 
-requires gitPython library from https://gitpython.readthedocs.io/en/stable/intro.html#requirements
+Required Software
+-----------------
+	SSH
+	ssh-keygen
+	Python 2.7
+	Git
+	
+Required Python Modules
+-----------------------
+	
+	requests - http://docs.python-requests.org/en/master/
+	gitpython - https://gitpython.readthedocs.io/en/stable/intro.html#requirements
+	
+Installing Python Modules with pip
+----------------------------------
+	
+	pip install requests
+	pip install gitpython
+	
+Running the script
+----------------------
 
-pip install requests
+    $ git clone https://github.com/AAFC-MBB/hpdb.git
+    $ cd LicenseFixer
+    $ python licenseFixer.py username [-o overwrite] [-d Dryrun]
+    
+The script will then prompt you for your git password
+	
 
-pip install gitpython
+Authors
+-------
+	Anthony Bushara
+	Satpal Bilkhu
 
+	
+Contact
+-------
 
-repo’s currently saved in home space under repo# ( where # increments for each repo downloaded )
+    Project Group email: mbb@agr.gc.ca
+    Project Developer: Satpal Bilkhu - Satpal.Bilkhu@agr.gc.ca

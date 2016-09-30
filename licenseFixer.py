@@ -2,6 +2,8 @@
 Created on Sep 26, 2016
 
 @author: busharaa
+@author: bilkhus
+
 '''
 import requests
 import argparse
@@ -121,7 +123,7 @@ if __name__ == '__main__':
     overwrite=False
     dryrun=False
     if(len(sys.argv) <= 1):
-        print("Usage: Bitbucket.py username [-o overwrite] [-d Dryrun]")
+        print("Usage: licenseFixer.py username [-o overwrite] [-d Dryrun]")
         exit()
     args = parser.parse_args()
     if (args.d):
