@@ -52,10 +52,10 @@ def cloneRepos(overwrite, dryrun):
     sshGithub = "git@github.com:" + username +"/"
     req = requests.get(baseAPI, auth=(username,password))
     statCode = req.status_code
-    homePath = os.path.expanduser("~")
+    homePath = os.getcwd()
     i = 0
     copyrightDate = ""
-    
+   
 
     if(statCode == 200):
         jobj = req.json()
@@ -68,24 +68,37 @@ def cloneRepos(overwrite, dryrun):
             print("RepoName: " + name)
             req = requests.get(baseAPI+name, auth=(username,password))
             print(sshBitBucket + name + ".git")
-            repoPathName = path.join(homePath, homePath+name)
+            repoPathName = path.join(homePath, homePath+ "/repos/" +name)
             repo = Repo.clone_from(sshBitBucket + name + ".git",repoPathName)
             #check if license is correct
             licensePath = path.join(repoPathName,repoPathName+"/LICENSE")
             if path.exists(licensePath):
                 (equality,copyrightDate) = isLicenseEqual(licensePath, DefaultLicense)
-                
+               
                 if(not equality and overwrite):
                     editLicense(licensePath, copyrightDate)
             else:
                 print("License doesn't exist")
+
+                repo.git.checkout(b="update_license_and_copyright")
+                print("created branch update_license_and_copyright")
                 editLicense(licensePath, "Copyright (c) " + str(datetime.datetime.now().year) + " ")
             if(not dryrun):
-                #commit and push
+                #add license file and commit to feature branch
                 index = repo.index
                 index.add(["LICENSE"])
-                index.commit("Updated license")
+                index.commit("Updated license and copyright")
+            
+                #checkout master branch and merge in feature branch
+                git = repo.git
+                git.checkout("master")
+                git.merge("--no-ff", "update_license_and_copyright")
+
+                print("merged into master")
+
+                #push changes to origin
                 repo.remotes.origin.push()
+                print("pushed to origin")
     else:
         print("ERROR: " + str(statCode))
         exit()
@@ -106,15 +119,15 @@ def isLicenseEqual(file1,myLicense):
         return (True, copyrightDate)
     else:
         return (False, "Copyright (c) " + str(datetime.datetime.now().year) + " ")
-     
-     
+    
+    
 def editLicense(repoPath,copyrightDate):
     f = open(repoPath,'w')
     print(f)
-    
+   
     f.write(DefaultLicense+"\n"+copyrightDate+correctCopyright)
     f.close()
-   
+  
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("username")
@@ -131,4 +144,3 @@ if __name__ == '__main__':
     if (args.o):
         overwrite = True
     cloneRepos( overwrite,dryrun)
-
