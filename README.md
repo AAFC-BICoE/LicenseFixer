@@ -31,14 +31,13 @@ Running the script
 The script will then prompt you for your git password
 	
 
-Authors
--------
-	Anthony Bushara
-	Satpal Bilkhu
+
 
 	
-Contact
--------
-
-    Project Group email: mbb@agr.gc.ca
+Authors and Contact Info
+------------------------
+	
+	Project Group email: mbb@agr.gc.ca
+	Project Developer: Anthony Bushara
     Project Developer: Satpal Bilkhu - Satpal.Bilkhu@agr.gc.ca
+
