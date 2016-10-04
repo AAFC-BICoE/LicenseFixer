@@ -12,30 +12,45 @@ import getpass
 import os
 from git import Repo
 from os import path
+import shutil
 import datetime
+import csv
+from itertools import islice
+
+csv.register_dialect(
+    'mydialect',
+    delimiter = ',',
+    quotechar = '"',
+    doublequote = True,
+    skipinitialspace = True,
+    lineterminator = '\n',
+    quoting = csv.QUOTE_MINIMAL)
 
 
-correctCopyright = """Government of Canada
+html_str_start = """
+<table border=1>
+     <tr>
+       <th>Repo</th>
+       <th>Repo License File</th>
+       <th>License HEAD - first 10 lines</th>
+     </tr>
+"""
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+html_str_end = """
+</table>
+"""
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+html_str_data_start = """
+       <tr>
+         <td>
+"""
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-    """
-DefaultLicense = "The MIT License (MIT)\n"
+html_str_data_end = """
+</td>
+       </tr>
+"""
+
+DefaultLicense = "MIT License\n"
 correctCopyrightHolder = "Government of Canada"
 
 def cloneRepos(overwrite, dryrun):
@@ -44,7 +59,7 @@ def cloneRepos(overwrite, dryrun):
 
     #TODO add in if /else to check for ORG vs user repo's
     #TODO add in if/else when dealing with Github vs bitbucket
-
+    baseBitbucketHttp = "https://bitbucket.org/"+username + "/"
     baseAPI = "https://api.bitbucket.org/2.0/repositories/"+username + "/"
     sshBitBucket = "git@altssh.bitbucket.org:"+username + "/"
     baseGithubAPIAAFC = "https://api.github.com/orgs/AAFC-MBB/repos"
@@ -55,7 +70,9 @@ def cloneRepos(overwrite, dryrun):
     homePath = os.getcwd()
     i = 0
     copyrightDate = ""
-   
+    
+    Html_file= open("htmlreport.html","w")
+    Html_file.write(html_str_start)
 
     if(statCode == 200):
         jobj = req.json()
@@ -67,23 +84,52 @@ def cloneRepos(overwrite, dryrun):
                 continue
             print("RepoName: " + name)
             req = requests.get(baseAPI+name, auth=(username,password))
+            cloneURL = sshBitBucket + name + ".git"
             print(sshBitBucket + name + ".git")
             repoPathName = path.join(homePath, homePath+ "/repos/" +name)
             repo = Repo.clone_from(sshBitBucket + name + ".git",repoPathName)
             #check if license is correct
+            homeLicensePath = path.join(homePath,homePath+"/LICENSE")
             licensePath = path.join(repoPathName,repoPathName+"/LICENSE")
+            licenseUpdated = False
+            
             if path.exists(licensePath):
-                (equality,copyrightDate) = isLicenseEqual(licensePath, DefaultLicense)
-               
-                if(not equality and overwrite):
-                    editLicense(licensePath, copyrightDate)
+                (equality,copyrightDate,fileToStr, headOfFile) = isLicenseEqual(licensePath, DefaultLicense,homePath, cloneURL)
+                if(equality and overwrite):
+                    #editLicense(homeLicensePath, licensePath)
+                    licenseUpdated = True
+                elif(not equality):
+                    print("License doesn't match")
+                    print("License is not MIT logging to file")
+                    oFile = open(homePath+"/report.csv",'a')
+                    wr = csv.writer(oFile, quoting=csv.QUOTE_ALL)
+                    outputLine = [fileToStr.rstrip(), cloneURL]
+                    wr.writerow(outputLine)
+                    oFile.close()
+                    
+                    linkString = '<a target="_blank" href="' + "file://" + licensePath+'">' + licensePath + "</a>"
+                    headString = str(headOfFile).strip("[]")
+                    headString = headString.replace('\\n', '<br />').replace(",","").replace("'","")
+                    repoHttpURL = '<a target="_blank" href="' + baseBitbucketHttp+name+'">' + baseBitbucketHttp+name + "</a>"
+                    
+                    html_row = html_str_data_start + repoHttpURL + "</td>" + "<td>" + linkString + "</td>" + "<td>" + headString + html_str_data_end 
+                    
+                    Html_file.write(html_row)
+                    
+                    continue
             else:
                 print("License doesn't exist")
-
+#                 repo.git.checkout(b="update_license_and_copyright")
+#                 print("created branch update_license_and_copyright")
+#                 editLicense(homeLicensePath, licensePath)
+                licenseUpdated = True
+                
+            if(not dryrun):
                 repo.git.checkout(b="update_license_and_copyright")
                 print("created branch update_license_and_copyright")
-                editLicense(licensePath, "Copyright (c) " + str(datetime.datetime.now().year) + " ")
-            if(not dryrun):
+                editLicense(homeLicensePath, licensePath)
+                
+                
                 #add license file and commit to feature branch
                 index = repo.index
                 index.add(["LICENSE"])
@@ -93,41 +139,48 @@ def cloneRepos(overwrite, dryrun):
                 git = repo.git
                 git.checkout("master")
                 git.merge("--no-ff", "update_license_and_copyright")
-
                 print("merged into master")
 
                 #push changes to origin
+                
                 repo.remotes.origin.push()
                 print("pushed to origin")
+        Html_file.write(html_str_end)
+        Html_file.close()
     else:
+        Html_file.write(html_str_end)
+        Html_file.close()
         print("ERROR: " + str(statCode))
         exit()
 
-#             commit with message "updated license", push
-
-def isLicenseEqual(file1,myLicense):
+def isLicenseEqual(file1,myLicense,homePath,cloneURL):
     oFile = open(file1,'r')
+    oFile2 = open(file1,'r')
     fileToStr = oFile.readline()
     oFile.readline()
     copyrightDate = oFile.readline()
-    copyrightHolder = copyrightDate[19:-1]
-    copyrightDate = copyrightDate[:19]
+    copyrightHolder = copyrightDate[18:-1]
+    copyrightDate = copyrightDate[:18]
+    headOfFile = list(islice(oFile2, 10))
+    print(fileToStr == myLicense)
     print(copyrightHolder == correctCopyrightHolder)
+    print ("First line of License file is : " + fileToStr.rstrip())
     print ("Copyrightholder: " + copyrightHolder)
-    if (fileToStr == myLicense and copyrightHolder == correctCopyrightHolder):
-        print("License is in fact equal")
-        return (True, copyrightDate)
+    if (fileToStr == myLicense):
+        print("License is MIT")
+        return (True, copyrightDate, fileToStr, headOfFile)
     else:
-        return (False, "Copyright (c) " + str(datetime.datetime.now().year) + " ")
+        print("License is not MIT")
+#         oFile = open(homePath+"/report.csv",'a')
+#         wr = csv.writer(oFile, quoting=csv.QUOTE_ALL)
+#         outputLine = [fileToStr.rstrip(), cloneURL]
+#         wr.writerow(outputLine)
+#         oFile.close()
+        return (False, "Copyright (c) " + str(datetime.datetime.now().year) + " ", fileToStr, headOfFile)
     
+def editLicense(homeLicensePath,repoPath):
+    shutil.copy2(homeLicensePath, repoPath)
     
-def editLicense(repoPath,copyrightDate):
-    f = open(repoPath,'w')
-    print(f)
-   
-    f.write(DefaultLicense+"\n"+copyrightDate+correctCopyright)
-    f.close()
-  
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("username")
