@@ -12,29 +12,9 @@ import getpass
 import os
 from git import Repo
 from os import path
+import shutil
 import datetime
 
-
-correctCopyright = """Government of Canada
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-    """
 DefaultLicense = "The MIT License (MIT)\n"
 correctCopyrightHolder = "Government of Canada"
 
@@ -56,7 +36,6 @@ def cloneRepos(overwrite, dryrun):
     i = 0
     copyrightDate = ""
    
-
     if(statCode == 200):
         jobj = req.json()
         for value in jobj['values']:
@@ -71,6 +50,7 @@ def cloneRepos(overwrite, dryrun):
             repoPathName = path.join(homePath, homePath+ "/repos/" +name)
             repo = Repo.clone_from(sshBitBucket + name + ".git",repoPathName)
             #check if license is correct
+            homeLicensePath = path.join(homePath,homePath+"/LICENSE")
             licensePath = path.join(repoPathName,repoPathName+"/LICENSE")
             if path.exists(licensePath):
                 (equality,copyrightDate) = isLicenseEqual(licensePath, DefaultLicense)
@@ -82,7 +62,7 @@ def cloneRepos(overwrite, dryrun):
 
                 repo.git.checkout(b="update_license_and_copyright")
                 print("created branch update_license_and_copyright")
-                editLicense(licensePath, "Copyright (c) " + str(datetime.datetime.now().year) + " ")
+                editLicense(homeLicensePath, licensePath)
             if(not dryrun):
                 #add license file and commit to feature branch
                 index = repo.index
@@ -103,8 +83,6 @@ def cloneRepos(overwrite, dryrun):
         print("ERROR: " + str(statCode))
         exit()
 
-#             commit with message "updated license", push
-
 def isLicenseEqual(file1,myLicense):
     oFile = open(file1,'r')
     fileToStr = oFile.readline()
@@ -121,13 +99,10 @@ def isLicenseEqual(file1,myLicense):
         return (False, "Copyright (c) " + str(datetime.datetime.now().year) + " ")
     
     
-def editLicense(repoPath,copyrightDate):
-    f = open(repoPath,'w')
-    print(f)
-   
-    f.write(DefaultLicense+"\n"+copyrightDate+correctCopyright)
-    f.close()
-  
+def editLicense(homePath,repoPath):
+    
+    shutil.copy2(homePath, repoPath)
+ 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("username")
