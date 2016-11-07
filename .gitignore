@@ -1,3 +1,4 @@
 #File to ignore
 .project
 .pydevproject
+*.*~
